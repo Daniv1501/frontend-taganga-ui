@@ -47,8 +47,8 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  // Catálogos de la API: red primero, y si no hay conexión, la última copia
-  if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) {
+  // Catálogos de la API (mismo origen o backend externo): red primero, y si no hay conexión, la última copia
+  if (url.pathname.startsWith("/api/")) {
     e.respondWith((async () => {
       const cache = await caches.open(API);
       try {

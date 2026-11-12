@@ -8,10 +8,13 @@ export class ApiError extends Error {
 
 const UNREACHABLE = 'No se pudo contactar el servidor'
 
+// URL del backend (repositorio taganga-one). Vacía en desarrollo: Vite reenvía /api al backend.
+const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
+
 export async function request(path, options = {}) {
   let response
   try {
-    response = await fetch(path, {
+    response = await fetch(API_BASE + path, {
       headers: { 'Content-Type': 'application/json' },
       ...options,
     })
