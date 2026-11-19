@@ -1,4 +1,10 @@
 const MAP_ICON = <path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/>
+const BOOK_ICON = (
+  <>
+    <path d="M2 5.5C4.5 4 8 4 12 6c4-2 7.5-2 10-.5V19c-2.5-1.5-6-1.5-10 .5-4-2-7.5-2-10-.5z"/>
+    <path d="M12 6v13.5"/>
+  </>
+)
 const CHAT_ICON = (
   <>
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -13,9 +19,10 @@ const SHIELD_ICON = (
 )
 
 const ITEMS = [
-  { id: 'nav-mapa', module: 'mod-mapa', color: 'azul', label: 'Mapa Territorial', icon: MAP_ICON },
-  { id: 'nav-asistente', module: 'mod-asistente', color: 'verde', label: 'Asistente Virtual', icon: CHAT_ICON },
-  { id: 'nav-decalogo', module: 'mod-decalogo', color: 'dorado', label: 'Decálogo', icon: SHIELD_ICON },
+  { id: 'nav-mapa', module: 'mod-mapa', color: 'azul', label: 'Mapa', longLabel: 'Mapa Territorial', icon: MAP_ICON },
+  { id: 'nav-historias', module: 'mod-historias', color: 'verde', label: 'Historias', longLabel: 'Historias', icon: BOOK_ICON },
+  { id: 'nav-asistente', module: 'mod-asistente', color: 'caribe', label: 'Asistente', longLabel: 'Asistente Virtual', icon: CHAT_ICON },
+  { id: 'nav-decalogo', module: 'mod-decalogo', color: 'dorado', label: 'Decálogo', longLabel: 'Decálogo', icon: SHIELD_ICON },
 ]
 
 export default function BottomNav({ active, onSelect }) {
@@ -35,7 +42,8 @@ export default function BottomNav({ active, onSelect }) {
           <span className="nav-pill">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{item.icon}</svg>
           </span>
-          {item.label}
+          <span className="nav-label nav-label--short">{item.label}</span>
+          <span className="nav-label nav-label--long">{item.longLabel}</span>
         </button>
       ))}
     </nav>
