@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { CATEGORIES, STORIES, findStory } from '../data/stories'
 import StoryArt from './StoryArt'
+import StoryPlayer from './StoryPlayer'
+import { STORY_AUDIO } from '../data/storyAudio'
 import { scrollToTop } from '../utils/scroll'
 
 const FILTERS = [['TODAS', 'Todas'], ...Object.entries(CATEGORIES).map(([key, cat]) => [key, cat.label])]
@@ -16,7 +18,7 @@ function CategoryTag({ category }) {
 
 const PIN_ICON = <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z" />
 
-function StoryReader({ story, onClose, onOpen, onShowOnMap }) {
+function StoryReader({ story, active, onClose, onOpen, onShowOnMap }) {
   const headingRef = useRef(null)
   const index = STORIES.indexOf(story)
   const prev = STORIES[index - 1]
@@ -48,6 +50,9 @@ function StoryReader({ story, onClose, onOpen, onShowOnMap }) {
       </div>
 
       <div className="lore-body">
+        {STORY_AUDIO[story.id] && (
+          <StoryPlayer key={story.id} story={story} audio={STORY_AUDIO[story.id]} active={active} />
+        )}
         <p className="lore-lead">{story.summary}</p>
         {story.body.map((paragraph, i) => (
           <p key={i} className={i === 0 ? 'lore-first' : undefined}>{paragraph}</p>
@@ -112,7 +117,7 @@ export default function StoriesModule({ active, openStoryId, onOpenStory, onClos
       aria-labelledby="nav-historias"
     >
       {story ? (
-        <StoryReader story={story} onClose={onCloseStory} onOpen={onOpenStory} onShowOnMap={onShowOnMap} />
+        <StoryReader story={story} active={active} onClose={onCloseStory} onOpen={onOpenStory} onShowOnMap={onShowOnMap} />
       ) : (
         <>
           <header className="stories-hero">
@@ -141,7 +146,15 @@ export default function StoriesModule({ active, openStoryId, onOpenStory, onClos
             {shown.map((item, i) => (
               <li key={item.id} style={{ '--i': i }}>
                 <button type="button" className="story-card" onClick={() => onOpenStory(item.id)}>
-                  <div className="story-card__art"><StoryArt story={item} /></div>
+                  <div className="story-card__art">
+                    <StoryArt story={item} />
+                    {STORY_AUDIO[item.id] && (
+                      <span className="story-card__audio">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg>
+                        {Math.max(1, Math.round(STORY_AUDIO[item.id].duration / 60))} min
+                      </span>
+                    )}
+                  </div>
                   <div className="story-card__body">
                     <CategoryTag category={item.category} />
                     <h3>{item.title}</h3>

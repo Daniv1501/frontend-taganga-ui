@@ -55,3 +55,32 @@ repositorio del backend).
 | `npm run build` | Compilación de producción en `dist/` |
 | `npm run preview` | Sirve la compilación de producción |
 | `npm run lint` | Revisión estática con oxlint |
+| `npm run audio:historias` | Genera la narración de las historias con Azure Speech (ver abajo) |
+
+## Narración de las historias (podcast)
+
+Cada historia puede tener una narración en formato podcast, con voz sintética neuronal de
+Azure Speech: una voz narra (`es-CO-SalomeNeural`) y otra lee las citas (`es-CO-GonzaloNeural`).
+Los audios se generan **una sola vez** y se publican como archivos estáticos en
+`public/audio/historias/`; la app no llama a Azure en ningún momento.
+
+1. Crea un recurso **Speech** en el portal de Azure (el plan gratuito F0 alcanza de sobra:
+   las 10 historias suman unos 13.000 caracteres) y copia su clave y región.
+2. Crea `.env.local` en la raíz (Git lo ignora, la clave no se sube):
+   ```
+   AZURE_SPEECH_KEY=tu-clave
+   AZURE_SPEECH_REGION=eastus
+   ```
+3. Genera los audios:
+   ```bash
+   npm run audio:historias                  # las que falten
+   npm run audio:historias -- --force       # todas de nuevo (p. ej. si cambió el texto)
+   npm run audio:historias -- isla-aguja    # solo una
+   ```
+   El script escribe los MP3 y actualiza `src/data/storyAudio.js`. Sube ambos a Git.
+
+Solo las historias con audio muestran el reproductor. Nunca suena solo: el visitante toca
+**Escuchar**, y la narración queda guardada para oírla sin conexión. Si algún día se graban
+las voces de los mayores, basta con reemplazar el MP3 con el mismo nombre (exportado como MP3
+mono de 48 kbps, para que la duración que calcula el script sea correcta) y volver a correr el
+script.
