@@ -4,15 +4,34 @@ import BottomNav from './BottomNav'
 import BrandLogo from './BrandLogo'
 import DecalogueModule from './DecalogueModule'
 import MapModule from './MapModule'
+import StoriesModule from './StoriesModule'
 import { scrollToTop } from '../utils/scroll'
 
 export default function MainScreen({ visitor, onLogout }) {
   const [activeModule, setActiveModule] = useState('mod-mapa')
+  // Historia abierta en el módulo Historias (null = lista)
+  const [openStoryId, setOpenStoryId] = useState(null)
+  // Historia que el mapa debe enfocar; `at` permite repetir la misma historia
+  const [mapFocus, setMapFocus] = useState(null)
   const firstName = visitor.fullName.split(' ')[0]
   const people = `${visitor.groupSize} persona${visitor.groupSize > 1 ? 's' : ''}`
 
   function selectModule(id) {
+    // Tocar "Historias" estando dentro de una historia vuelve a la lista
+    if (id === 'mod-historias' && activeModule === 'mod-historias') setOpenStoryId(null)
     setActiveModule(id)
+    scrollToTop()
+  }
+
+  function readStory(storyId) {
+    setOpenStoryId(storyId)
+    setActiveModule('mod-historias')
+    scrollToTop()
+  }
+
+  function showStoryOnMap(storyId) {
+    setMapFocus({ storyId, at: Date.now() })
+    setActiveModule('mod-mapa')
     scrollToTop()
   }
 
@@ -31,7 +50,20 @@ export default function MainScreen({ visitor, onLogout }) {
 
       {/* Los módulos se ocultan sin desmontarse: el mapa y la conversación conservan su estado */}
       <main>
-        <MapModule visitor={visitor} firstName={firstName} active={activeModule === 'mod-mapa'} />
+        <MapModule
+          visitor={visitor}
+          firstName={firstName}
+          active={activeModule === 'mod-mapa'}
+          focus={mapFocus}
+          onReadStory={readStory}
+        />
+        <StoriesModule
+          active={activeModule === 'mod-historias'}
+          openStoryId={openStoryId}
+          onOpenStory={readStory}
+          onCloseStory={() => setOpenStoryId(null)}
+          onShowOnMap={showStoryOnMap}
+        />
         <AssistantModule firstName={firstName} active={activeModule === 'mod-asistente'} />
         <DecalogueModule active={activeModule === 'mod-decalogo'} />
       </main>

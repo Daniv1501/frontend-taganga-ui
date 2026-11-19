@@ -3,6 +3,12 @@ import L from 'leaflet'
 import ErrorMessage from './ErrorMessage'
 import { useZones } from '../hooks/useZones'
 import { GROUPS, ZONE_TYPES, zoneType } from '../data/zoneTypes'
+import { CATEGORIES as STORY_CATEGORIES, STORIES } from '../data/stories'
+import { SCENE_ICONS } from '../data/sceneIcons'
+
+const STORY_GROUP = 'HISTORIAS'
+const STORY_COLOR = '#D17900'
+const FILTER_GROUPS = [...GROUPS, [STORY_GROUP, 'Historias']]
 
 // Taganga y sus alrededores: el mapa no deja perderse lejos del territorio
 const AREA = L.latLngBounds([11.235, -74.235], [11.325, -74.155])
@@ -83,6 +89,39 @@ function buildLayer(zone) {
       if (on) layer.bringToFront()
     },
   }
+}
+
+// Marcador de historia: gota con el ícono de su escena y el color de su categoría
+function storyIcon(story) {
+  const cat = STORY_CATEGORIES[story.category]
+  return L.divIcon({
+    className: 'story-marker',
+    html: `<span class="story-pin" style="--pin:${cat.color}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="${SCENE_ICONS[story.scene]}"/></svg>
+    </span>`,
+    iconSize: [42, 50],
+    iconAnchor: [21, 48],
+    popupAnchor: [0, -46],
+    tooltipAnchor: [0, -46],
+  })
+}
+
+// Vista previa de la historia; el botón abre la historia completa en el módulo Historias
+function storyPreview(story, onRead) {
+  const cat = STORY_CATEGORIES[story.category]
+  const box = L.DomUtil.create('div', 'story-pop')
+  box.innerHTML = `
+    <span class="pop-tag" style="background:${cat.color}">${escapeHtml(cat.label)}</span>
+    <div class="pop-title">${escapeHtml(story.title)}</div>
+    <div class="pop-rule">${escapeHtml(story.place)} · ${escapeHtml(story.summary)}</div>`
+  const button = L.DomUtil.create('button', 'story-pop__btn', box)
+  button.type = 'button'
+  button.innerHTML = 'Leer historia <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
+  L.DomEvent.on(button, 'click', (event) => {
+    L.DomEvent.stop(event)
+    onRead(story.id)
+  })
+  return box
 }
 
 // Botón propio en el estilo de los controles de Leaflet
@@ -184,7 +223,7 @@ function LegendSwatch({ cat }) {
   )
 }
 
-export default function MapModule({ visitor, firstName, active }) {
+export default function MapModule({ visitor, firstName, active, focus, onReadStory }) {
   const { data: zones, error } = useZones()
   const containerRef = useRef(null)
   const mapRef = useRef(null)
@@ -193,13 +232,33 @@ export default function MapModule({ visitor, firstName, active }) {
   const boundsRef = useRef(null)
   const selectedRef = useRef(null)
   const [selected, setSelected] = useState(null)
-  const [visible, setVisible] = useState(() => Object.fromEntries(GROUPS.map(([group]) => [group, true])))
+  const storyMarkersRef = useRef(new Map())
+  const onReadStoryRef = useRef(onReadStory)
+  const [visible, setVisible] = useState(() => Object.fromEntries(FILTER_GROUPS.map(([group]) => [group, true])))
+
+  useEffect(() => {
+    onReadStoryRef.current = onReadStory
+  }, [onReadStory])
 
   useEffect(() => {
     const container = containerRef.current
     const map = createMap(container)
     mapRef.current = map
-    groupsRef.current = Object.fromEntries(GROUPS.map(([group]) => [group, L.layerGroup()]))
+    groupsRef.current = Object.fromEntries(FILTER_GROUPS.map(([group]) => [group, L.layerGroup()]))
+
+    // Marcadores de las historias (datos locales: se dibujan aunque la API no responda)
+    const storyMarkers = storyMarkersRef.current
+    STORIES.forEach((story) => {
+      const marker = L.marker(story.position, { icon: storyIcon(story), title: story.title, riseOnHover: true })
+      marker.bindPopup(storyPreview(story, (id) => onReadStoryRef.current?.(id)), {
+        autoPanPaddingTopLeft: [20, 56],
+        autoPanPaddingBottomRight: [20, 20],
+        className: 'story-popup',
+        maxWidth: 260,
+      })
+      marker.addTo(groupsRef.current[STORY_GROUP])
+      storyMarkers.set(story.id, marker)
+    })
 
     addButton(map, {
       title: 'Ver todas las zonas',
@@ -237,10 +296,26 @@ export default function MapModule({ visitor, firstName, active }) {
     return () => {
       window.removeEventListener('resize', handleResize)
       document.removeEventListener('fullscreenchange', handleFullscreen)
+      storyMarkers.clear()
       map.remove()
       mapRef.current = null
     }
   }, [])
+
+  // Desde una historia, "Ver en el mapa": muestra la capa, vuela al marcador y abre su vista previa
+  useEffect(() => {
+    const map = mapRef.current
+    const marker = focus && storyMarkersRef.current.get(focus.storyId)
+    if (!map || !marker) return undefined
+    setVisible((current) => (current[STORY_GROUP] ? current : { ...current, [STORY_GROUP]: true }))
+    // Espera a que el módulo vuelva a ser visible y Leaflet recalcule su tamaño
+    const id = setTimeout(() => {
+      map.invalidateSize()
+      map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 16), { duration: 0.8 })
+      map.once('moveend', () => marker.openPopup())
+    }, 120)
+    return () => clearTimeout(id)
+  }, [focus])
 
   // Dibuja las zonas cuando llegan de la API
   useEffect(() => {
@@ -314,7 +389,8 @@ export default function MapModule({ visitor, firstName, active }) {
 
   const selectedCat = selected ? zoneType(selected.type) : null
   // Color representativo de cada filtro: el de su primera convención
-  const groupColor = (group) => Object.values(ZONE_TYPES).find((cat) => cat.group === group).color
+  const groupColor = (group) =>
+    group === STORY_GROUP ? STORY_COLOR : Object.values(ZONE_TYPES).find((cat) => cat.group === group).color
 
   return (
     <div
@@ -351,12 +427,12 @@ export default function MapModule({ visitor, firstName, active }) {
           </div>
           <div>
             <h2>Zona Especial de Pesca Ancestral (ZEPAT)</h2>
-            <p>Toca una zona para ver sus normas · usa la rueda del mouse o pellizca para acercar</p>
+            <p>Toca una zona para ver sus normas o un marcador para leer su historia</p>
           </div>
         </div>
 
         <div className="map-filters" role="group" aria-label="Filtrar capas del mapa">
-          {GROUPS.map(([group, label]) => (
+          {FILTER_GROUPS.map(([group, label]) => (
             <button
               key={group}
               className="chip"
@@ -375,6 +451,7 @@ export default function MapModule({ visitor, firstName, active }) {
           {Object.entries(ZONE_TYPES).map(([type, cat]) => (
             <div key={type}><LegendSwatch cat={cat} />{cat.label}</div>
           ))}
+          <div><span className="legend-pin" style={{ '--pin': STORY_COLOR }}></span>Historia (toca para leer)</div>
         </div>
 
         <ErrorMessage error={error} />
