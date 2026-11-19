@@ -661,6 +661,78 @@ main{padding:16px 16px calc(var(--nav-h) + 40px + var(--safe-b))}
 .lore-pager__next{grid-column:2;text-align:right !important}
 .lore .map-note,.lore-body>p.map-note{padding:8px 0 18px;font-size:.76rem;line-height:1.5;margin:0;color:var(--texto-suave)}
 
+/* Reproductor de narración: píldora mínima que se despliega al escuchar */
+.player{
+  position:relative;overflow:hidden;margin:0 0 22px;max-width:560px;
+  background:#fff;border:1px solid var(--borde);border-radius:18px;
+  box-shadow:var(--sh-1);
+  transition:box-shadow .3s var(--ease),border-color .3s;
+}
+.player--open,.player--playing{border-color:rgba(10,134,191,.22);box-shadow:var(--sh-2)}
+.player__head{display:flex;align-items:center;gap:12px;padding:8px 8px 8px 10px}
+.player__play{
+  width:38px;height:38px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
+  background:var(--grad-sol);color:#fff;box-shadow:0 6px 14px -6px rgba(209,121,0,.7);
+  transition:transform .15s var(--ease),filter .2s;
+}
+.player__play svg{margin-left:1px}
+.player--playing .player__play svg{margin-left:0}
+.player__play:hover{filter:brightness(1.07);transform:scale(1.06)}
+.player__play:active{transform:scale(.92)}
+.player__spinner{width:16px;height:16px;border-radius:50%;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.player__info{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.player__label{font-family:var(--f-display);font-weight:700;font-size:.95rem;color:var(--marino)}
+.player__meta{font-size:.76rem;color:var(--texto-suave);font-variant-numeric:tabular-nums}
+.player__ai{
+  display:inline-block;padding:0 7px;border-radius:999px;font-size:.66rem;font-weight:700;
+  background:var(--azul-claro);color:var(--azul);
+}
+.player__toggle{
+  width:34px;height:34px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;
+  color:var(--texto-suave);transition:background .2s,color .2s;
+}
+.player__toggle:hover{background:var(--fondo);color:var(--marino)}
+.player__toggle svg{transition:transform .3s var(--ease)}
+.player--open .player__toggle svg{transform:rotate(180deg)}
+
+/* Línea de avance mínima: solo con el panel plegado y la narración en curso */
+.player__mini{
+  position:absolute;left:0;bottom:0;height:3px;width:var(--progress);
+  background:linear-gradient(90deg,var(--caribe-vivo),var(--ambar));
+  opacity:0;transition:opacity .25s,width .25s linear;
+}
+.player--playing:not(.player--open) .player__mini{opacity:1}
+
+/* Panel desplegable */
+.player__panel{display:grid;grid-template-rows:0fr;transition:grid-template-rows .35s var(--ease)}
+.player--open .player__panel{grid-template-rows:1fr}
+.player__panel-inner{overflow:hidden;min-height:0}
+.player__bar{display:flex;align-items:center;gap:10px;padding:4px 14px 0}
+.player__time{font-size:.72rem;font-variant-numeric:tabular-nums;color:var(--texto-suave);min-width:30px;text-align:center}
+.player__bar input{
+  flex:1;height:4px;border-radius:999px;appearance:none;-webkit-appearance:none;cursor:pointer;
+  background:linear-gradient(90deg,var(--caribe-vivo),var(--ambar)) 0/var(--progress) 100% no-repeat,#E3EAF2;
+}
+.player__bar input::-webkit-slider-thumb{
+  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;
+  border:2px solid var(--ambar);box-shadow:0 1px 4px rgba(6,42,77,.25);
+}
+.player__bar input::-moz-range-thumb{width:11px;height:11px;border:2px solid var(--ambar);border-radius:50%;background:#fff}
+.player__controls{display:flex;justify-content:center;gap:6px;padding:6px 10px 10px}
+.player__controls button{
+  display:flex;align-items:center;gap:4px;min-height:32px;padding:2px 10px;border-radius:999px;
+  font-size:.76rem;font-weight:700;color:var(--texto-suave);transition:background .2s,color .2s;
+}
+.player__controls button:hover{background:var(--fondo);color:var(--marino)}
+.player__error{padding:0 14px 10px;font-size:.78rem;color:var(--rojo)}
+.story-card__audio{
+  position:absolute;top:10px;right:10px;z-index:1;display:flex;align-items:center;gap:5px;
+  padding:4px 10px;border-radius:999px;font-size:.72rem;font-weight:700;color:#fff;
+  background:rgba(6,42,77,.55);border:1px solid rgba(255,255,255,.3);backdrop-filter:blur(6px);
+}
+.story-card__audio svg{color:var(--ambar)}
+
 /* =========================================================
    NAVEGACIÓN INFERIOR (flotante, vidrio)
    ========================================================= */
