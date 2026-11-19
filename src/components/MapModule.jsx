@@ -2,23 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import ErrorMessage from './ErrorMessage'
 import { useZones } from '../hooks/useZones'
-
-const STYLES = {
-  FREE_TRANSIT: { color: '#004A87', fillColor: '#004A87', fillOpacity: 0.22, weight: 2.5, label: 'Libre tránsito turístico' },
-  SACRED: { color: '#D17900', fillColor: '#D17900', fillOpacity: 0.3, weight: 2.5, label: 'Sitio sagrado / religioso' },
-  ECOLOGICAL: { color: '#005C06', fillColor: '#005C06', fillOpacity: 0.25, weight: 2.5, label: 'Protección ecológica' },
-  ARTISANAL_FISHING: { color: '#A3231B', fillColor: '#A3231B', fillOpacity: 0.18, weight: 2.5, dashArray: '6 6', label: 'Reserva de pesca artesanal' },
-}
-
-const FILTERS = [
-  ['FREE_TRANSIT', 'Libre tránsito'],
-  ['SACRED', 'Sagrado'],
-  ['ECOLOGICAL', 'Ecológico'],
-  ['ARTISANAL_FISHING', 'Reserva pesquera'],
-]
+import { GROUPS, ZONE_TYPES, zoneType } from '../data/zoneTypes'
 
 // Taganga y sus alrededores: el mapa no deja perderse lejos del territorio
-const AREA = L.latLngBounds([11.235, -74.235], [11.305, -74.155])
+const AREA = L.latLngBounds([11.235, -74.235], [11.325, -74.155])
+
+const HATCH_ID = 'zepat-hatch'
+
+// Capas en orden de dibujo: ZEPAT abajo, afectaciones encima, recorridos arriba
+const PANES = { ZEPAT: ['zepat', 410], AREA: ['usos', 420], LINE: ['recorridos', 430] }
 
 const ICONS = {
   fit: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><circle cx="12" cy="12" r="2.5"/></svg>',
@@ -30,26 +22,67 @@ function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 }
 
-function baseStyle(zone) {
-  const style = STYLES[zone.type]
-  if (zone.geometry === 'LINE') return { color: style.color, weight: 4, dashArray: '2 8', lineCap: 'round' }
-  if (zone.geometry === 'POINT') return { radius: 10, color: '#fff', weight: 3, fillColor: style.color, fillOpacity: 1 }
-  return style
+function paneFor(zone) {
+  if (zone.geometry === 'LINE') return PANES.LINE[0]
+  return zone.type === 'ZEPAT' ? PANES.ZEPAT[0] : PANES.AREA[0]
 }
 
-// Resalte de la zona bajo el mouse o seleccionada
-function highlightStyle(zone) {
-  const base = baseStyle(zone)
-  if (zone.geometry === 'POINT') return { ...base, radius: 13 }
-  if (zone.geometry === 'LINE') return { ...base, weight: 7 }
-  return { ...base, weight: 4.5, fillOpacity: Math.min(base.fillOpacity + 0.2, 0.6) }
+function polygonStyle(cat, highlighted) {
+  if (cat.hatch) {
+    return { color: cat.color, weight: highlighted ? 3.5 : 1.5, fillColor: `url(#${HATCH_ID})`, fillOpacity: 1 }
+  }
+  return { color: cat.color, weight: highlighted ? 3 : 1.5, fillColor: cat.color, fillOpacity: highlighted ? 0.95 : 0.78 }
 }
 
+function lineStyle(cat, highlighted) {
+  const extra = highlighted ? 2.5 : 0
+  const line = cat.line ?? { weight: 3 }
+  return {
+    main: { color: cat.color, weight: line.weight + extra, dashArray: line.dashArray, lineCap: 'round', lineJoin: 'round' },
+    casing: line.casing && { color: line.casing, weight: line.weight + 3 + extra, lineCap: 'round', lineJoin: 'round' },
+  }
+}
+
+function toLatLngs(zone) {
+  return zone.coordinates.map((c) => [c.latitude, c.longitude])
+}
+
+// Devuelve la capa de Leaflet y una función para resaltarla o no
 function buildLayer(zone) {
-  const points = zone.coordinates.map((c) => [c.latitude, c.longitude])
-  if (zone.geometry === 'POLYGON') return L.polygon(points, baseStyle(zone))
-  if (zone.geometry === 'LINE') return L.polyline(points, baseStyle(zone))
-  return L.circleMarker(points[0], baseStyle(zone))
+  const cat = zoneType(zone.type)
+  const pane = paneFor(zone)
+  const latlngs = toLatLngs(zone)
+
+  if (zone.geometry === 'POINT') {
+    const style = (on) => ({ radius: on ? 13 : 10, color: '#fff', weight: 3, fillColor: cat.color, fillOpacity: 1 })
+    const layer = L.circleMarker(latlngs[0], { ...style(false), pane })
+    return { layer, highlight: (on) => layer.setStyle(style(on)) }
+  }
+
+  if (zone.geometry === 'LINE') {
+    const style = lineStyle(cat, false)
+    const main = L.polyline(latlngs, { ...style.main, pane })
+    const casing = style.casing && L.polyline(latlngs, { ...style.casing, pane })
+    const layer = L.featureGroup(casing ? [casing, main] : [main])
+    return {
+      layer,
+      highlight(on) {
+        const next = lineStyle(cat, on)
+        main.setStyle(next.main)
+        casing?.setStyle(next.casing)
+        if (on) layer.bringToFront()
+      },
+    }
+  }
+
+  const layer = L.polygon(latlngs, { ...polygonStyle(cat, false), pane })
+  return {
+    layer,
+    highlight(on) {
+      layer.setStyle(polygonStyle(cat, on))
+      if (on) layer.bringToFront()
+    },
+  }
 }
 
 // Botón propio en el estilo de los controles de Leaflet
@@ -90,12 +123,16 @@ function createMap(container) {
     wheelDebounceTime: 30,
     zoomSnap: 0.25,
     zoomDelta: 0.5,
-    minZoom: 13,
+    minZoom: 12,
     maxZoom: 19,
     maxBounds: AREA.pad(0.5),
     maxBoundsViscosity: 0.8,
     tap: true,
   }).setView([11.2665, -74.194], 15)
+
+  Object.values(PANES).forEach(([name, zIndex]) => {
+    map.createPane(name).style.zIndex = zIndex
+  })
 
   L.control.zoom({ position: 'topleft', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(map)
   L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map)
@@ -130,6 +167,23 @@ function createMap(container) {
   return map
 }
 
+// Muestra de la convención en la leyenda, igual a como se dibuja en el mapa
+function LegendSwatch({ cat }) {
+  if (cat.line) {
+    return (
+      <svg width="24" height="12" viewBox="0 0 24 12" aria-hidden="true">
+        {cat.line.casing && <line x1="2" y1="6" x2="22" y2="6" stroke={cat.line.casing} strokeWidth="6" strokeLinecap="round" />}
+        <line x1="2" y1="6" x2="22" y2="6" stroke={cat.color} strokeWidth="3" strokeLinecap="round" strokeDasharray={cat.line.dashArray} />
+      </svg>
+    )
+  }
+  return (
+    <svg width="24" height="14" viewBox="0 0 24 14" aria-hidden="true">
+      <rect x="1" y="1" width="22" height="12" rx="2" fill={cat.hatch ? `url(#${HATCH_ID})` : cat.color} stroke={cat.color} strokeWidth="1.5" />
+    </svg>
+  )
+}
+
 export default function MapModule({ visitor, firstName, active }) {
   const { data: zones, error } = useZones()
   const containerRef = useRef(null)
@@ -139,23 +193,16 @@ export default function MapModule({ visitor, firstName, active }) {
   const boundsRef = useRef(null)
   const selectedRef = useRef(null)
   const [selected, setSelected] = useState(null)
-  const [visible, setVisible] = useState({
-    FREE_TRANSIT: true,
-    SACRED: true,
-    ECOLOGICAL: true,
-    ARTISANAL_FISHING: true,
-  })
+  const [visible, setVisible] = useState(() => Object.fromEntries(GROUPS.map(([group]) => [group, true])))
 
   useEffect(() => {
     const container = containerRef.current
     const map = createMap(container)
     mapRef.current = map
-    groupsRef.current = Object.fromEntries(
-      Object.keys(STYLES).map((type) => [type, L.layerGroup()]),
-    )
+    groupsRef.current = Object.fromEntries(GROUPS.map(([group]) => [group, L.layerGroup()]))
 
     addButton(map, {
-      title: 'Ver todo el territorio',
+      title: 'Ver todas las zonas',
       icon: ICONS.fit,
       onClick: () => {
         if (boundsRef.current) map.flyToBounds(boundsRef.current, { padding: [20, 20], duration: 0.6 })
@@ -203,31 +250,35 @@ export default function MapModule({ visitor, firstName, active }) {
     const layers = layersRef.current
 
     zones.forEach((zone) => {
-      const style = STYLES[zone.type]
-      const layer = buildLayer(zone)
+      const cat = zoneType(zone.type)
+      const entry = buildLayer(zone)
+      const { layer } = entry
       layer.bindPopup(
-        `<span class="pop-tag" style="background:${style.color}">${escapeHtml(style.label)}</span>
+        `<span class="pop-tag" style="background:${cat.color};color:${cat.ink || '#fff'}">${escapeHtml(cat.label)}</span>
          <div class="pop-title">${escapeHtml(zone.name)}</div>
          <div class="pop-rule">${escapeHtml(zone.rule)}</div>`,
         { autoPanPadding: [24, 24] },
       )
       // Nombre de la zona al pasar el mouse
       layer.bindTooltip(escapeHtml(zone.name), { sticky: zone.geometry !== 'POINT', direction: 'top', className: 'zone-tip' })
-      layer.on('mouseover', () => layer.setStyle(highlightStyle(zone)))
+      layer.on('mouseover', () => entry.highlight(true))
       layer.on('mouseout', () => {
-        if (selectedRef.current?.code !== zone.code) layer.setStyle(baseStyle(zone))
+        if (selectedRef.current?.code !== zone.code) entry.highlight(false)
       })
       layer.on('click', () => setSelected(zone))
       // Con el popup abierto, el nombre flotante sobra y queda tapado
       layer.on('popupopen', () => layer.closeTooltip())
-      layer.addTo(groups[zone.type])
-      layers.set(zone.code, { layer, zone })
+      layer.addTo(groups[cat.group])
+      layers.set(zone.code, entry)
     })
 
-    // Encuadra todas las zonas, sea cual sea el tamaño del mapa
-    const points = zones.flatMap((zone) => zone.coordinates.map((c) => [c.latitude, c.longitude]))
-    boundsRef.current = L.latLngBounds(points)
-    map.fitBounds(boundsRef.current, { padding: [20, 20], animate: false })
+    // Encuadra las zonas ZEPAT (o todas, si no hay), sea cual sea el tamaño del mapa
+    const framed = zones.some((zone) => zone.type === 'ZEPAT') ? zones.filter((zone) => zone.type === 'ZEPAT') : zones
+    const points = framed.flatMap(toLatLngs)
+    if (points.length) {
+      boundsRef.current = L.latLngBounds(points)
+      map.fitBounds(boundsRef.current, { padding: [20, 20], animate: false })
+    }
 
     return () => {
       Object.values(groups).forEach((group) => group.clearLayers())
@@ -240,24 +291,17 @@ export default function MapModule({ visitor, firstName, active }) {
     const previous = selectedRef.current
     selectedRef.current = selected
     const layers = layersRef.current
-    if (previous) {
-      const entry = layers.get(previous.code)
-      entry?.layer.setStyle(baseStyle(entry.zone))
-    }
-    if (selected) {
-      const entry = layers.get(selected.code)
-      entry?.layer.setStyle(highlightStyle(selected))
-      entry?.layer.bringToFront?.()
-    }
+    if (previous) layers.get(previous.code)?.highlight(false)
+    if (selected) layers.get(selected.code)?.highlight(true)
   }, [selected])
 
   // Filtros de capas
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    Object.entries(groupsRef.current).forEach(([type, group]) => {
-      if (visible[type]) group.addTo(map)
-      else map.removeLayer(group)
+    Object.entries(groupsRef.current).forEach(([group, layerGroup]) => {
+      if (visible[group]) layerGroup.addTo(map)
+      else map.removeLayer(layerGroup)
     })
   }, [visible])
 
@@ -268,7 +312,9 @@ export default function MapModule({ visitor, firstName, active }) {
     return () => clearTimeout(id)
   }, [active])
 
-  const selectedStyle = selected ? STYLES[selected.type] : null
+  const selectedCat = selected ? zoneType(selected.type) : null
+  // Color representativo de cada filtro: el de su primera convención
+  const groupColor = (group) => Object.values(ZONE_TYPES).find((cat) => cat.group === group).color
 
   return (
     <div
@@ -277,6 +323,16 @@ export default function MapModule({ visitor, firstName, active }) {
       role="tabpanel"
       aria-labelledby="nav-mapa"
     >
+      {/* Patrón de achurado de las zonas ZEPAT, usado por el mapa y la leyenda */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true" focusable="false">
+        <defs>
+          <pattern id={HATCH_ID} patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)">
+            <rect width="7" height="7" fill="rgba(31,95,168,0.14)" />
+            <line x1="0" y1="0" x2="0" y2="7" stroke="#1F5FA8" strokeWidth="1.6" />
+          </pattern>
+        </defs>
+      </svg>
+
       <div className="welcome">
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2>¡Bienvenido, {firstName}!</h2>
@@ -294,32 +350,31 @@ export default function MapModule({ visitor, firstName, active }) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg>
           </div>
           <div>
-            <h2>Mapa de locaciones sagradas</h2>
+            <h2>Zona Especial de Pesca Ancestral (ZEPAT)</h2>
             <p>Toca una zona para ver sus normas · usa la rueda del mouse o pellizca para acercar</p>
           </div>
         </div>
 
         <div className="map-filters" role="group" aria-label="Filtrar capas del mapa">
-          {FILTERS.map(([type, label]) => (
+          {GROUPS.map(([group, label]) => (
             <button
-              key={type}
+              key={group}
               className="chip"
-              aria-pressed={visible[type]}
-              onClick={() => setVisible((current) => ({ ...current, [type]: !current[type] }))}
+              aria-pressed={visible[group]}
+              onClick={() => setVisible((current) => ({ ...current, [group]: !current[group] }))}
             >
-              <span className="dot" style={{ background: STYLES[type].color }}></span>
+              <span className="dot" style={{ background: groupColor(group) }}></span>
               {label}
             </button>
           ))}
         </div>
 
-        <div id="map" ref={containerRef} role="application" aria-label="Mapa interactivo de Taganga"></div>
+        <div id="map" ref={containerRef} role="application" aria-label="Mapa interactivo de las zonas de pesca ancestral de Taganga"></div>
 
         <div className="legend" aria-hidden="true">
-          <div><i style={{ background: 'rgba(0,74,135,.25)', borderColor: '#004A87' }}></i>Libre tránsito turístico</div>
-          <div><i style={{ background: 'rgba(209,121,0,.3)', borderColor: '#D17900' }}></i>Sitio sagrado / religioso</div>
-          <div><i style={{ background: 'rgba(0,92,6,.25)', borderColor: '#005C06' }}></i>Protección ecológica</div>
-          <div><i style={{ background: 'rgba(163,35,27,.2)', borderColor: '#A3231B', borderStyle: 'dashed' }}></i>Reserva pesca artesanal</div>
+          {Object.entries(ZONE_TYPES).map(([type, cat]) => (
+            <div key={type}><LegendSwatch cat={cat} />{cat.label}</div>
+          ))}
         </div>
 
         <ErrorMessage error={error} />
@@ -327,11 +382,11 @@ export default function MapModule({ visitor, firstName, active }) {
         <div
           className="site-info"
           aria-live="polite"
-          style={selectedStyle ? { borderLeftColor: selectedStyle.color } : undefined}
+          style={selectedCat ? { borderLeftColor: selectedCat.color } : undefined}
         >
           {selected ? (
             <>
-              <span className="tag" style={{ background: selectedStyle.color }}>{selectedStyle.label}</span>
+              <span className="tag" style={{ background: selectedCat.color, color: selectedCat.ink || '#fff' }}>{selectedCat.label}</span>
               <b>{selected.name}</b>
               {selected.description}<br />
               <strong>Norma:</strong> {selected.rule}
@@ -340,11 +395,11 @@ export default function MapModule({ visitor, firstName, active }) {
             <>
               <span className="tag" style={{ background: 'var(--azul)' }}>Info</span>
               <b>Selecciona una zona del mapa</b>
-              Verás qué está permitido y qué está restringido en cada área.
+              Las zonas ZEPAT son espacios donde tradicionalmente se pesca con chinchorro. Los colores muestran qué actividades afectan esa pesca.
             </>
           )}
         </div>
-        <p className="map-note">⚠ Delimitación referencial para el prototipo. Los polígonos definitivos deben validarse con la comunidad y las autoridades ancestrales.</p>
+        <p className="map-note">⚠ Delimitación referencial digitalizada de la cartografía ZEPAT del Cabildo Indígena de Taganga (14/10/2026). Los límites definitivos los valida el Cabildo.</p>
       </article>
     </div>
   )
