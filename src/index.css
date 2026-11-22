@@ -92,11 +92,12 @@ button{cursor:pointer;border:none;background:none}
   overflow:hidden;
   isolation:isolate;
 }
-.auth-hero::before{ /* cerro */
-  content:"";position:absolute;inset:auto -10% 10px -10%;height:120px;z-index:-1;
-  background:linear-gradient(180deg,rgba(30,123,52,.55),rgba(0,92,6,.15));
-  clip-path:polygon(0 100%,18% 40%,32% 70%,52% 20%,70% 62%,84% 38%,100% 80%,100% 100%);
-  opacity:.55;
+.auth-hero::before{ /* atardecer en la bahía de Taganga, difuminado y con velo marino para leer el texto */
+  content:"";position:absolute;inset:-24px;z-index:-1;
+  background:
+    linear-gradient(170deg,rgba(6,42,77,.55) 0%,rgba(6,42,77,.35) 45%,rgba(6,42,77,.78) 100%),
+    url('/images/taganga-atardecer.jpg') 30% 62% / cover no-repeat;
+  filter:blur(5px) saturate(1.15);
 }
 .auth-hero::after{ /* ola */
   content:"";position:absolute;left:-5%;right:-5%;bottom:-2px;height:56px;
@@ -105,8 +106,8 @@ button{cursor:pointer;border:none;background:none}
 }
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
 .brand-logo{
-  width:52px;height:52px;border-radius:16px;
-  background:linear-gradient(160deg,#fff 0%,#E8F0F8 100%);display:grid;place-items:center;flex-shrink:0;
+  width:52px;height:52px;border-radius:16px;overflow:hidden;
+  background:#fff;display:grid;place-items:center;flex-shrink:0;
   box-shadow:0 1px 0 #fff inset,0 8px 20px rgba(0,0,0,.25);
 }
 .brand-name{font-size:1.7rem;font-weight:800;line-height:1.05}
@@ -882,7 +883,6 @@ main{padding:16px 16px calc(var(--nav-h) + 40px + var(--safe-b))}
     padding:48px clamp(48px,7vw,120px);
   }
   .auth-hero::after{display:none}
-  .auth-hero::before{height:200px;bottom:0}
   .auth-hero .brand-name{font-size:2.2rem}
   .auth-hero .brand-sub{font-size:.98rem}
   .auth-hero h1{font-size:clamp(2.2rem,3.4vw,3.4rem);line-height:1.05;max-width:16ch;margin-bottom:16px}

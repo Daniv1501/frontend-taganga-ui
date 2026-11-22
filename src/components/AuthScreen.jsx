@@ -154,7 +154,7 @@ export default function AuthScreen({ initialMode, install, onEnter, onToast }) {
     <section id="screen-auth" aria-label="Registro de visitantes">
       <header className="auth-hero">
         <div className="brand">
-          <BrandLogo size={34} />
+          <BrandLogo size={46} />
           <div>
             <div className="brand-name">Taganga <span>One</span></div>
             <div className="brand-sub">Territorio ancestral · Santa Marta</div>

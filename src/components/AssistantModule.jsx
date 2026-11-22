@@ -4,7 +4,7 @@ import { askAssistant } from '../api/assistant'
 import { useFaqs } from '../hooks/useFaqs'
 import Mascot from './Mascot'
 
-const OFFLINE_ANSWER = '<p>No pude contactar el servidor para responder eso. Las preguntas frecuentes de abajo siguen disponibles sin conexión.</p>'
+const OFFLINE_ANSWER = '<p>No pude contactar el servidor para responder eso. Las preguntas rápidas de abajo siguen respondiendo sin conexión.</p>'
 const TALK_MS = 2200
 
 const STATUS = {
@@ -15,6 +15,26 @@ const STATUS = {
 }
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const HISTORY_TURNS = 8
+const HISTORY_CHARS = 2000
+
+// Las respuestas del asistente son HTML: al historial se envía solo el texto
+function toPlainText(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim()
+}
+
+// Últimos turnos de la conversación, en el formato que espera el backend
+function buildHistory(messages) {
+  return messages
+    .slice(-HISTORY_TURNS)
+    .map((message) => ({
+      role: message.role === 'user' ? 'user' : 'assistant',
+      text: (message.role === 'user' ? message.content : toPlainText(message.content)).slice(0, HISTORY_CHARS),
+    }))
+    .filter((turn) => turn.text)
+}
 
 function BotMessage({ children }) {
   return (
@@ -52,24 +72,28 @@ export default function AssistantModule({ firstName, active }) {
     setMessages((current) => [...current, { id: nextId.current++, role, content }])
   }
 
-  async function send(question, fixedAnswer) {
+  // Toda pregunta, también las rápidas, la responde el asistente (Gemini). `offlineAnswer`
+  // es la respuesta guardada de una pregunta rápida: solo se usa si no hay conexión.
+  async function send(question, offlineAnswer) {
     if (busy) return
     setBusy(true)
     setTalking(false)
+    // Historial antes de agregar la pregunta actual (va aparte)
+    const history = buildHistory(messages)
     addMessage('user', question)
 
-    let answer = fixedAnswer
-    if (!answer) {
-      try {
-        const result = await ask.mutateAsync({ question, visitorName: firstName })
-        answer = result.answer
-      } catch {
-        answer = OFFLINE_ANSWER
-      }
+    let answer
+    let fromAi = false
+    try {
+      const result = await ask.mutateAsync({ question, visitorName: firstName, history })
+      answer = result.answer
+      fromAi = result.source === 'gemini'
+    } catch {
+      answer = offlineAnswer || OFFLINE_ANSWER
     }
 
-    // Simula "pensar", igual que el prototipo
-    await wait(600 + Math.min(1200, answer.length * 2))
+    // Las respuestas instantáneas simulan "pensar"; Gemini ya tardó lo suyo
+    if (!fromAi) await wait(600 + Math.min(1200, answer.length * 2))
     addMessage('bot', answer)
     setBusy(false)
     setTalking(true)

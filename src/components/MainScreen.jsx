@@ -38,7 +38,7 @@ export default function MainScreen({ visitor, onLogout }) {
   return (
     <section id="screen-main" aria-label="Taganga One">
       <header className="topbar">
-        <BrandLogo size={26} />
+        <BrandLogo size={36} />
         <div className="topbar-title">
           <b>Taganga <span>One</span></b>
           <small>{visitor.fullName} · {people}</small>

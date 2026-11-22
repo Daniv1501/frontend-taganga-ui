@@ -9,7 +9,7 @@ export const CATEGORIES = {
   SAGRADO: { label: 'Sitio Sagrado', color: '#1E7B34', soft: '#E4F2E7', ink: '#0F4A1D' },
   ANCON: { label: 'Ancón de Pesca', color: '#0A86BF', soft: '#E1F3FB', ink: '#064E70' },
   PATRIMONIO: { label: 'Patrimonio y Memoria', color: '#D17900', soft: '#FBEFDC', ink: '#7A4600' },
-  LEYENDA: { label: 'Leyenda', color: '#123E73', soft: '#E3EAF4', ink: '#0B2A52' },
+  ESPIRITUAL: { label: 'Autoridades espirituales', color: '#123E73', soft: '#E3EAF4', ink: '#0B2A52' },
 }
 
 export const STORIES = [
@@ -33,7 +33,7 @@ export const STORIES = [
     id: 'viejo-cachilla',
     title: 'El Viejo de la Cachilla',
     place: 'Ancón de la Cueva',
-    category: 'LEYENDA',
+    category: 'ESPIRITUAL',
     scene: 'tabaco',
     position: [11.2985, -74.1718],
     summary: 'Un tabaco en el hoyo soplador de las lajas: si la marea aspira el humo y el viejo se lo fuma, viene buena pesca.',
@@ -66,7 +66,7 @@ export const STORIES = [
     id: 'virgen-rosario',
     title: 'El Milagro de la Virgen del Rosario',
     place: 'Iglesia San Francisco de Asís',
-    category: 'LEYENDA',
+    category: 'ESPIRITUAL',
     scene: 'virgen',
     position: [11.2669, -74.1887],
     summary: 'Un cuadro para Gaira y un busto para Taganga que aparecieron intercambiados dos veces, hasta quedarse donde cada uno eligió.',
