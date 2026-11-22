@@ -182,25 +182,34 @@ function createMap(container) {
   const streets = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19,
     attribution: esriAttribution,
-  }).addTo(map)
+  })
+  // Vista satelital por defecto: se reconocen la bahía, los cerros y las playas
   const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxZoom: 19,
     // Esri no tiene fotos de más detalle en la zona: se amplían las de nivel 18
     maxNativeZoom: 18,
     attribution: 'Tiles &copy; Esri &mdash; Esri, Maxar, Earthstar Geographics',
-  })
-  L.control.layers({ Calles: streets, Satélite: satellite }, null, { position: 'topright' }).addTo(map)
+  }).addTo(map)
+  L.control.layers({ Satélite: satellite, Calles: streets }, null, { position: 'topright' }).addTo(map)
 
-  // Respaldo automático (también sin clave) si Esri falla varias veces
-  let failures = 0
-  streets.on('tileerror', () => {
-    if (++failures !== 6) return
-    map.removeLayer(streets)
+  // Respaldo automático (también sin clave): si la capa de Esri activa falla varias
+  // veces, se cambia a OpenStreetMap
+  let usingFallback = false
+  const fallBack = (layer) => {
+    if (usingFallback || !map.hasLayer(layer)) return
+    usingFallback = true
+    map.removeLayer(layer)
     L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
       subdomains: 'abc',
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · OSM France',
     }).addTo(map).bringToBack()
+  }
+  ;[satellite, streets].forEach((layer) => {
+    let failures = 0
+    layer.on('tileerror', () => {
+      if (++failures === 6) fallBack(layer)
+    })
   })
 
   return map

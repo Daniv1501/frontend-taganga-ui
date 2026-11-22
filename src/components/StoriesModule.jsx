@@ -123,7 +123,7 @@ export default function StoriesModule({ active, openStoryId, onOpenStory, onClos
           <header className="stories-hero">
             <span className="eyebrow">Memoria viva</span>
             <h2>Historias de Taganga</h2>
-            <p>Leyendas, sitios sagrados y luchas que sostienen la identidad del pueblo taganguero. Cada historia tiene su lugar en el mapa.</p>
+            <p>Autoridades espirituales, sitios sagrados y luchas que sostienen la identidad del pueblo taganguero. Cada historia tiene su lugar en el mapa.</p>
           </header>
 
           <div className="story-filters" role="group" aria-label="Filtrar historias por categoría">
