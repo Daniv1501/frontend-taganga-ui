@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react'
 const proxy = {
   '/api': {
     target: process.env.API_URL ?? 'http://localhost:8080',
+    changeOrigin: true,
     configure: (proxyServer) => {
       proxyServer.on('proxyReq', (proxyReq) => proxyReq.removeHeader('origin'))
     },

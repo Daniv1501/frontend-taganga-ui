@@ -13,7 +13,18 @@ const FILTER_GROUPS = [...GROUPS, [STORY_GROUP, 'Historias']]
 // Taganga y sus alrededores: el mapa no deja perderse lejos del territorio
 const AREA = L.latLngBounds([11.235, -74.235], [11.325, -74.155])
 
-const HATCH_ID = 'zepat-hatch'
+const PATTERNS = {
+  ZEPAT: 'M0 8 8 0',
+  DIVING_IMPACT: 'M0 0 8 8',
+  DIVING_AGREED: 'M0 4h8',
+  NO_DIVING: 'M0 0 8 8M0 8 8 0',
+  SNORKEL: 'M4 0v8',
+  SNORKEL_IMPACT: 'M2 2h1M6 6h1',
+  SNORKEL_NO_IMPACT: 'M2 2h4M2 6h4',
+  BOAT_IMPACT: 'M4 0v8M0 4h8',
+  TOURISM_IMPACT: 'M0 5 4 1l4 4',
+}
+const zoneFill = (type, cat) => PATTERNS[type] ? `url(#zone-pattern-${type})` : cat.color
 
 // Capas en orden de dibujo: ZEPAT abajo, afectaciones encima, recorridos arriba
 const PANES = { ZEPAT: ['zepat', 410], AREA: ['usos', 420], LINE: ['recorridos', 430] }
@@ -33,11 +44,8 @@ function paneFor(zone) {
   return zone.type === 'ZEPAT' ? PANES.ZEPAT[0] : PANES.AREA[0]
 }
 
-function polygonStyle(cat, highlighted) {
-  if (cat.hatch) {
-    return { color: cat.color, weight: highlighted ? 3.5 : 1.5, fillColor: `url(#${HATCH_ID})`, fillOpacity: 1 }
-  }
-  return { color: cat.color, weight: highlighted ? 3 : 1.5, fillColor: cat.color, fillOpacity: highlighted ? 0.95 : 0.78 }
+function polygonStyle(type, cat, highlighted) {
+  return { color: cat.color, weight: highlighted ? 4 : 2, fillColor: zoneFill(type, cat), fillOpacity: 1 }
 }
 
 function lineStyle(cat, highlighted) {
@@ -81,11 +89,11 @@ function buildLayer(zone) {
     }
   }
 
-  const layer = L.polygon(latlngs, { ...polygonStyle(cat, false), pane })
+  const layer = L.polygon(latlngs, { ...polygonStyle(zone.type, cat, false), pane })
   return {
     layer,
     highlight(on) {
-      layer.setStyle(polygonStyle(cat, on))
+      layer.setStyle(polygonStyle(zone.type, cat, on))
       if (on) layer.bringToFront()
     },
   }
@@ -216,7 +224,7 @@ function createMap(container) {
 }
 
 // Muestra de la convención en la leyenda, igual a como se dibuja en el mapa
-function LegendSwatch({ cat }) {
+function LegendSwatch({ type, cat }) {
   if (cat.line) {
     return (
       <svg width="24" height="12" viewBox="0 0 24 12" aria-hidden="true">
@@ -227,7 +235,7 @@ function LegendSwatch({ cat }) {
   }
   return (
     <svg width="24" height="14" viewBox="0 0 24 14" aria-hidden="true">
-      <rect x="1" y="1" width="22" height="12" rx="2" fill={cat.hatch ? `url(#${HATCH_ID})` : cat.color} stroke={cat.color} strokeWidth="1.5" />
+      <rect x="1" y="1" width="22" height="12" rx="2" fill={zoneFill(type, cat)} stroke={cat.color} strokeWidth="1.5" />
     </svg>
   )
 }
@@ -235,6 +243,7 @@ function LegendSwatch({ cat }) {
 export default function MapModule({ visitor, firstName, active, focus, onReadStory }) {
   const { data: zones, error } = useZones()
   const containerRef = useRef(null)
+  const mapFrameRef = useRef(null)
   const mapRef = useRef(null)
   const groupsRef = useRef({})
   const layersRef = useRef(new Map())
@@ -251,7 +260,13 @@ export default function MapModule({ visitor, firstName, active, focus, onReadSto
 
   useEffect(() => {
     const container = containerRef.current
+    const frame = mapFrameRef.current
     const map = createMap(container)
+    const clearSelection = () => setSelected(null)
+    map.on('click popupopen', clearSelection)
+    map.on('keydown', ({ originalEvent }) => {
+      if (originalEvent.key === 'Escape') clearSelection()
+    })
     mapRef.current = map
     groupsRef.current = Object.fromEntries(FILTER_GROUPS.map(([group]) => [group, L.layerGroup()]))
 
@@ -280,20 +295,20 @@ export default function MapModule({ visitor, firstName, active, focus, onReadSto
     // Pantalla completa (no disponible en todos los navegadores, p. ej. iPhone)
     let fullscreenButton = null
     const handleFullscreen = () => {
-      const isFull = document.fullscreenElement === container
+      const isFull = document.fullscreenElement === frame
       fullscreenButton?.update(
         isFull ? 'Salir de pantalla completa' : 'Pantalla completa',
         isFull ? ICONS.shrink : ICONS.expand,
       )
       setTimeout(() => map.invalidateSize(), 100)
     }
-    if (container.requestFullscreen) {
+    if (frame.requestFullscreen) {
       fullscreenButton = addButton(map, {
         title: 'Pantalla completa',
         icon: ICONS.expand,
         onClick: () => {
           if (document.fullscreenElement) document.exitFullscreen()
-          else container.requestFullscreen().catch(() => {})
+          else frame.requestFullscreen().catch(() => {})
         },
       })
       document.addEventListener('fullscreenchange', handleFullscreen)
@@ -337,21 +352,18 @@ export default function MapModule({ visitor, firstName, active, focus, onReadSto
       const cat = zoneType(zone.type)
       const entry = buildLayer(zone)
       const { layer } = entry
-      layer.bindPopup(
-        `<span class="pop-tag" style="background:${cat.color};color:${cat.ink || '#fff'}">${escapeHtml(cat.label)}</span>
-         <div class="pop-title">${escapeHtml(zone.name)}</div>
-         <div class="pop-rule">${escapeHtml(zone.rule)}</div>`,
-        { autoPanPadding: [24, 24] },
-      )
       // Nombre de la zona al pasar el mouse
       layer.bindTooltip(escapeHtml(zone.name), { sticky: zone.geometry !== 'POINT', direction: 'top', className: 'zone-tip' })
       layer.on('mouseover', () => entry.highlight(true))
       layer.on('mouseout', () => {
         if (selectedRef.current?.code !== zone.code) entry.highlight(false)
       })
-      layer.on('click', () => setSelected(zone))
-      // Con el popup abierto, el nombre flotante sobra y queda tapado
-      layer.on('popupopen', () => layer.closeTooltip())
+      layer.on('click', (event) => {
+        L.DomEvent.stopPropagation(event)
+        map.closePopup()
+        layer.closeTooltip()
+        setSelected(zone)
+      })
       layer.addTo(groups[cat.group])
       layers.set(zone.code, entry)
     })
@@ -365,7 +377,7 @@ export default function MapModule({ visitor, firstName, active, focus, onReadSto
     }
 
     return () => {
-      Object.values(groups).forEach((group) => group.clearLayers())
+      GROUPS.forEach(([group]) => groups[group].clearLayers())
       layers.clear()
     }
   }, [zones])
@@ -408,18 +420,21 @@ export default function MapModule({ visitor, firstName, active, focus, onReadSto
       role="tabpanel"
       aria-labelledby="nav-mapa"
     >
-      {/* Patrón de achurado de las zonas ZEPAT, usado por el mapa y la leyenda */}
+      {/* El mapa, la ficha y la leyenda comparten las mismas convenciones. */}
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true" focusable="false">
         <defs>
-          <pattern id={HATCH_ID} patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)">
-            <rect width="7" height="7" fill="rgba(31,95,168,0.14)" />
-            <line x1="0" y1="0" x2="0" y2="7" stroke="#1F5FA8" strokeWidth="1.6" />
-          </pattern>
+          {Object.entries(PATTERNS).map(([type, path]) => (
+            <pattern key={type} id={`zone-pattern-${type}`} patternUnits="userSpaceOnUse" width="8" height="8">
+              <rect width="8" height="8" fill={ZONE_TYPES[type].color} fillOpacity={type === 'ZEPAT' ? 0.25 : 0.6} />
+              <path d={path} fill="none" stroke="#10273B" strokeWidth="1.3" />
+              <path d={path} fill="none" stroke="#fff" strokeWidth="0.75" transform="translate(0.75 0.75)" />
+            </pattern>
+          ))}
         </defs>
       </svg>
 
       <div className="welcome">
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="welcome-copy">
           <h2>¡Bienvenido, {firstName}!</h2>
           <p>Muestra tu código a la autoridad comunitaria si te lo solicitan.</p>
         </div>
@@ -446,7 +461,10 @@ export default function MapModule({ visitor, firstName, active, focus, onReadSto
               key={group}
               className="chip"
               aria-pressed={visible[group]}
-              onClick={() => setVisible((current) => ({ ...current, [group]: !current[group] }))}
+              onClick={() => {
+                if (selectedCat?.group === group) setSelected(null)
+                setVisible((current) => ({ ...current, [group]: !current[group] }))
+              }}
             >
               <span className="dot" style={{ background: groupColor(group) }}></span>
               {label}
@@ -454,37 +472,35 @@ export default function MapModule({ visitor, firstName, active, focus, onReadSto
           ))}
         </div>
 
-        <div id="map" ref={containerRef} role="application" aria-label="Mapa interactivo de las zonas de pesca ancestral de Taganga"></div>
+        <div className="map-frame" ref={mapFrameRef}>
+          <div id="map" ref={containerRef} role="application" aria-label="Mapa interactivo de las zonas de pesca ancestral de Taganga"></div>
+          <div className="map-selection" aria-live="polite">
+            {selected && (
+              <section className="site-info" aria-labelledby="selected-zone-name" style={{ borderColor: selectedCat.color }}>
+                <button className="zone-close" type="button" aria-label="Cerrar ficha de zona" onClick={() => {
+                  setSelected(null)
+                  containerRef.current.focus({ preventScroll: true })
+                }}>×</button>
+                <h3 id="selected-zone-name">{selected.name}</h3>
+                <p className="zone-activity"><LegendSwatch type={selected.type} cat={selectedCat} />{selectedCat.label}</p>
+                <p><strong>Norma:</strong> {selected.rule}</p>
+                {selected.description && <p className="zone-description">{selected.description}</p>}
+              </section>
+            )}
+          </div>
+        </div>
 
-        <div className="legend" aria-hidden="true">
+        <div className="legend" role="group" aria-label="Convenciones del mapa">
           {Object.entries(ZONE_TYPES).map(([type, cat]) => (
-            <div key={type}><LegendSwatch cat={cat} />{cat.label}</div>
+            <div key={type} className={selected?.type === type ? 'legend-current' : undefined} aria-current={selected?.type === type || undefined}>
+              <LegendSwatch type={type} cat={cat} />{cat.label}
+            </div>
           ))}
           <div><span className="legend-pin" style={{ '--pin': STORY_COLOR }}></span>Historia (toca para leer)</div>
         </div>
 
         <ErrorMessage error={error} />
 
-        <div
-          className="site-info"
-          aria-live="polite"
-          style={selectedCat ? { borderLeftColor: selectedCat.color } : undefined}
-        >
-          {selected ? (
-            <>
-              <span className="tag" style={{ background: selectedCat.color, color: selectedCat.ink || '#fff' }}>{selectedCat.label}</span>
-              <b>{selected.name}</b>
-              {selected.description}<br />
-              <strong>Norma:</strong> {selected.rule}
-            </>
-          ) : (
-            <>
-              <span className="tag" style={{ background: 'var(--azul)' }}>Info</span>
-              <b>Selecciona una zona del mapa</b>
-              Las zonas ZEPAT son espacios donde tradicionalmente se pesca con chinchorro. Los colores muestran qué actividades afectan esa pesca.
-            </>
-          )}
-        </div>
         <p className="map-note">⚠ Delimitación referencial digitalizada de la cartografía ZEPAT del Cabildo Indígena de Taganga (14/10/2026). Los límites definitivos los valida el Cabildo.</p>
       </article>
     </div>
