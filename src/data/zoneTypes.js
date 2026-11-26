@@ -5,7 +5,7 @@
 // `group` agrupa los filtros del mapa; `ink` es el color de texto sobre colores claros.
 
 export const ZONE_TYPES = {
-  ZEPAT: { label: 'ZEPAT', group: 'ZEPAT', color: '#1F5FA8', hatch: true },
+  ZEPAT: { label: 'ZEPAT', group: 'ZEPAT', color: '#1F5FA8' },
   DIVING_IMPACT: { label: 'Buceo con afectación', group: 'BUCEO', color: '#F5A300' },
   DIVING_AGREED: { label: 'Buceo concertado', group: 'BUCEO', color: '#2FA51E' },
   NO_DIVING: { label: 'No buceo', group: 'BUCEO', color: '#A8710A' },
